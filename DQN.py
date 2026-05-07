@@ -1,6 +1,7 @@
 import random
 from collections import deque
 from functools import reduce
+from time import sleep
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -155,12 +156,14 @@ for i_episode in range(1, n_episodes + 1):
         torch.save(agent.qnetwork.state_dict(), "checkpoint.pth")
         break
 
+human_env = gym.make("gymnasium_env/Filler-v0", size=env_size, render_mode="human")
 if True:
-    state, _ = env.reset()
+    state, _ = human_env.reset()
     score = 0
     for t in range(300):
-        action = agent.act(state)
-        next_state, reward, terminated, truncated, _ = env.step(action)
+        action = agent.act(state, eval_mode=False)
+        sleep(0.1)
+        next_state, reward, terminated, truncated, _ = human_env.step(action)
         done = terminated or truncated
         agent.step(state, action, reward, next_state, done)
         state = next_state

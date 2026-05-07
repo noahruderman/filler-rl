@@ -2,9 +2,12 @@ from typing import Optional
 
 import gymnasium as gym
 import numpy as np
+import pygame
 
 
 class FillerEnv(gym.Env):
+    metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 10}
+
     def __init__(self, render_mode=None, size: int = 5):
         self.size = size
         self.window_size = 600
@@ -16,6 +19,12 @@ class FillerEnv(gym.Env):
         )
 
         self.action_space = gym.spaces.Discrete(6)
+
+        assert render_mode is None or render_mode in self.metadata["render_modes"]
+        self.render_mode = render_mode
+
+        self.window = None
+        self.clock = None
 
     def _get_obs(self):
         return np.reshape(self._grid, -1)
@@ -47,6 +56,9 @@ class FillerEnv(gym.Env):
 
         observation = self._get_obs()
         info = self._get_info()
+
+        if self.render_mode == "human":
+            self._render_frame()
 
         return observation, info
 
@@ -86,4 +98,52 @@ class FillerEnv(gym.Env):
         observation = self._get_obs()
         info = self._get_info()
 
+        if self.render_mode == "human":
+            self._render_frame()
+
         return observation, reward, terminated, truncated, info
+
+    def _render_frame(self):
+        if self.window is None and self.render_mode == "human":
+            pygame.init()
+            pygame.display.init()
+            self.window = pygame.display.set_mode((self.window_size, self.window_size))
+        if self.clock is None and self.render_mode == "human":
+            self.clock = pygame.time.Clock()
+
+        canvas = pygame.Surface((self.window_size, self.window_size))
+        canvas.fill((255, 255, 255))
+        pix_square_size = self.window_size / self.size
+
+        colors = [
+            (0xF8, 0x47, 0x62),  # red
+            (0xFF, 0xE0, 0x1C),  # yellow
+            (0x90, 0xBE, 0x47),  # green
+            (0x42, 0xAC, 0xE9),  # blue
+            (0x6A, 0x4B, 0xA2),  # purple
+            (0x40, 0x40, 0x40),  # gray
+        ]
+
+        for y in range(self.size):
+            for x in range(self.size):
+                color = (
+                    self._grid[y][x] if self._grid[y][x] != -1 else self._player_color
+                )
+                pygame.draw.rect(
+                    canvas,
+                    colors[color],
+                    pygame.Rect(
+                        (pix_square_size * x, pix_square_size * y),
+                        (pix_square_size, pix_square_size),
+                    ),
+                )
+
+        if self.render_mode == "human":
+            self.window.blit(canvas, canvas.get_rect())  # type: ignore
+            pygame.event.pump()
+            pygame.display.update()
+
+    def close(self):
+        if self.window is not None:
+            pygame.display.quit()
+            pygame.quit()
