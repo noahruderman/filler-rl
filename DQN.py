@@ -119,8 +119,8 @@ print(state_size, action_size)
 agent = DQNAgent(state_size, action_size)
 
 # Training parameters
-n_episodes = 500
-max_t = env_size * env_size * 2
+n_episodes = 300
+max_t = env_size * 4
 
 # Lists to track progress
 scores = []
@@ -165,7 +165,7 @@ if True:
     score = 0
     for t in range(300):
         action = agent.act(state, eval_mode=False)
-        sleep(0.1)
+        sleep(0.2)
         next_state, reward, terminated, truncated, _ = human_env.step(action)
         done = terminated or truncated
         # agent.step(state, action, reward, next_state, done)
@@ -177,9 +177,17 @@ if True:
     print("steps:", t, "reward:", score)
 
 
+def get_moving_avgs(arr, window, convolution_model):
+    return (
+        np.convolve(np.array(arr).flatten(), np.ones(window), mode=convolution_model)
+        / window
+    )
+
+
 # Plot the scores
 plt.figure(figsize=(10, 6))
-plt.plot(np.arange(len(scores)), scores)
+# plt.plot(np.arange(len(scores)), scores)
+plt.plot(np.arange(len(scores)-10+1), get_moving_avgs(scores, 10, "valid"))
 plt.ylabel("Score")
 plt.xlabel("Episode #")
 plt.title("DQN Training Progress")
