@@ -124,6 +124,7 @@ max_t = env_size * env_size * 2
 scores = []
 scores_window = deque(maxlen=100)
 
+finishers = 0
 # Training loop
 for i_episode in range(1, n_episodes + 1):
     state, _ = env.reset()
@@ -136,12 +137,13 @@ for i_episode in range(1, n_episodes + 1):
         state = next_state
         score += reward  # type: ignore
         if done:
+            finishers += 1
             break
 
     scores_window.append(score)
     scores.append(score)
 
-    msg = f"\rEpisode {i_episode}\tAverage Score: {np.mean(scores_window):.2f}"
+    msg = f"\rEpisode {i_episode}\tCompleted {finishers}\tAverage Score: {np.mean(scores_window):.2f}"
     print(msg, end="")
     if i_episode % 100 == 0:
         print(msg)
@@ -152,6 +154,22 @@ for i_episode in range(1, n_episodes + 1):
         )
         torch.save(agent.qnetwork.state_dict(), "checkpoint.pth")
         break
+
+if True:
+    state, _ = env.reset()
+    score = 0
+    for t in range(300):
+        action = agent.act(state)
+        next_state, reward, terminated, truncated, _ = env.step(action)
+        done = terminated or truncated
+        agent.step(state, action, reward, next_state, done)
+        state = next_state
+        score += reward  # type: ignore
+        if done:
+            break
+        print(reward)
+    print("steps:", t, "reward:", score)
+
 
 # Plot the scores
 plt.figure(figsize=(10, 6))
