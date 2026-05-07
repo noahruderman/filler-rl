@@ -54,12 +54,14 @@ class DQNAgent:
             experiences = random.sample(self.memory, self.batch_size)
             self.learn(experiences)
 
-    def act(self, state, eval_mode=False):
+    def act(self, state, action_mask, eval_mode=False):
         state = torch.from_numpy(state).float().unsqueeze(0)  # type: ignore
+
+        assert np.count_nonzero(action_mask) != 0
 
         # Epsilon-greedy action selection
         if not eval_mode and random.random() < self.epsilon:
-            return random.choice(np.arange(self.action_size))
+            return random.choices(np.arange(self.action_size), action_mask)[0]
 
         self.qnetwork.eval()
         with torch.no_grad():
@@ -67,7 +69,9 @@ class DQNAgent:
         self.qnetwork.train()
 
         # Greedy action selection
-        return np.argmax(action_values.cpu().data.numpy())
+        selections = action_values.cpu().data.numpy()
+        arr = [selections[0][i] if action_mask[i] else float('-inf') for i in range(self.action_size)]
+        return np.argmax(arr)
 
     def learn(self, experiences):
         states, actions, rewards, next_states, dones = zip(*experiences)
@@ -101,26 +105,26 @@ class DQNAgent:
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
 
-gym.register(id="gymnasium_env/Filler-v0", entry_point=FillerEnv)
+gym.register(id="gymnasium_env/Filler-v0", entry_point=FillerEnv)  # type:ignore
 
 # Create the environment
-env_size = 5
-env = gym.make("gymnasium_env/Filler-v0", size=env_size)
+env_grid_size = 5
+env = gym.make("gymnasium_env/Filler-v0", size=env_grid_size)
 
 if not env.observation_space.shape:
     print("not defined")
     exit()
 
 state_size = reduce(lambda a, b: a * b, list(env.observation_space.shape), 1)
-action_size = env.action_space.n
+action_size = env.action_space.n  # type: ignore
 print(state_size, action_size)
 
 # Initialize agent
 agent = DQNAgent(state_size, action_size)
 
 # Training parameters
-n_episodes = 300
-max_t = env_size * 4
+n_episodes = 600
+max_t = env_grid_size * 5 // 2
 
 # Lists to track progress
 scores = []
@@ -129,11 +133,11 @@ scores_window = deque(maxlen=100)
 finishers = 0
 # Training loop
 for i_episode in range(1, n_episodes + 1):
-    state, _ = env.reset()
+    state, info = env.reset()
     score = 0
     for t in range(max_t):
-        action = agent.act(state)
-        next_state, reward, terminated, truncated, _ = env.step(action)
+        action = agent.act(state, action_mask=info["action_mask"])
+        next_state, reward, terminated, truncated, info = env.step(action)
         done = terminated or truncated
         agent.step(state, action, reward, next_state, done)
         state = next_state
@@ -159,14 +163,14 @@ for i_episode in range(1, n_episodes + 1):
         torch.save(agent.qnetwork.state_dict(), "checkpoint.pth")
         break
 
-human_env = gym.make("gymnasium_env/Filler-v0", size=env_size, render_mode="human")
+human_env = gym.make("gymnasium_env/Filler-v0", size=env_grid_size, render_mode="human")
 if True:
-    state, _ = human_env.reset()
+    state, info = human_env.reset()
     score = 0
     for t in range(300):
-        action = agent.act(state, eval_mode=False)
+        action = agent.act(state, eval_mode=False, action_mask=info["action_mask"])
         sleep(0.2)
-        next_state, reward, terminated, truncated, _ = human_env.step(action)
+        next_state, reward, terminated, truncated, info = human_env.step(action)
         done = terminated or truncated
         # agent.step(state, action, reward, next_state, done)
         state = next_state
@@ -174,7 +178,7 @@ if True:
         if done:
             break
         print(reward)
-    print("steps:", t, "reward:", score)
+    print("steps:", t, "reward:", score)  # type: ignore
 
 
 def get_moving_avgs(arr, window, convolution_model):
@@ -187,7 +191,7 @@ def get_moving_avgs(arr, window, convolution_model):
 # Plot the scores
 plt.figure(figsize=(10, 6))
 # plt.plot(np.arange(len(scores)), scores)
-plt.plot(np.arange(len(scores)-10+1), get_moving_avgs(scores, 10, "valid"))
+plt.plot(np.arange(len(scores) - 10 + 1), get_moving_avgs(scores, 10, "valid"))
 plt.ylabel("Score")
 plt.xlabel("Episode #")
 plt.title("DQN Training Progress")

@@ -1,3 +1,4 @@
+import math
 from typing import Optional
 
 import gymnasium as gym
@@ -29,8 +30,8 @@ class FillerEnv(gym.Env):
     def _get_obs(self):
         """Concatenate the grid with the player's color
 
-            One hot: instead of using the color as a number,
-            use a binary array (better for neural nets)
+        One hot: instead of using the color as a number,
+        use a binary array (better for neural nets)
         """
         grid_indices = self._grid.reshape(-1) + 1
         grid_one_hot = np.eye(7, dtype=np.float32)[grid_indices]
@@ -41,9 +42,24 @@ class FillerEnv(gym.Env):
         return np.concatenate([grid_one_hot, player_one_hot])
 
     def _get_info(self):
+        action_mask = np.zeros(6)
+
+        # find moves that increase the score
+        for y in range(self.size):
+            for x in range(self.size):
+                if self._grid[y, x] != -1:
+                    continue
+                for dx, dy in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < self.size and 0 <= ny < self.size:
+                        adj_color = self._grid[ny, nx]
+                        if adj_color != -1:
+                            action_mask[adj_color] = 1
+
         return {
             "score": np.count_nonzero(self._grid == -1),
             "player_color": self._player_color,
+            "action_mask": action_mask,
         }
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
@@ -54,12 +70,12 @@ class FillerEnv(gym.Env):
         )
 
         # ensure adjacent grid cells are not equal
-        for i in range(self.size):
-            for j in range(self.size):
-                while (i > 0 and self._grid[i][j] == self._grid[i - 1][j]) or (
-                    j > 0 and self._grid[i][j] == self._grid[i][j - 1]
+        for y in range(self.size):
+            for x in range(self.size):
+                while (y > 0 and self._grid[y][x] == self._grid[y - 1][x]) or (
+                    x > 0 and self._grid[y][x] == self._grid[y][x - 1]
                 ):
-                    self._grid[i][j] = self.np_random.integers(0, 6)
+                    self._grid[y][x] = self.np_random.integers(0, 6)
 
         # for now, we will ignore player 2
         self._player_color = self._grid[0][0]
@@ -83,26 +99,25 @@ class FillerEnv(gym.Env):
         self._player_color = action
 
         added = 0
-        for i in range(self.size):
-            for j in range(self.size):
-                if self._grid[i][j] == action and (
-                    (i > 0 and self._grid[i - 1][j] == -1)
-                    or (i + 1 < self.size and self._grid[i + 1][j] == -1)
-                    or (j > 0 and self._grid[i][j - 1] == -1)
-                    or (j + 1 < self.size and self._grid[i][j + 1] == -1)
+        sum_of_distances = 0
+        for y in range(self.size):
+            for x in range(self.size):
+                if self._grid[y][x] == action and (
+                    (y > 0 and self._grid[y - 1][x] == -1)
+                    or (y + 1 < self.size and self._grid[y + 1][x] == -1)
+                    or (x > 0 and self._grid[y][x - 1] == -1)
+                    or (x + 1 < self.size and self._grid[y][x + 1] == -1)
                 ):
-                    self._grid[i][j] = -1
+                    self._grid[y][x] = -1
                     added += 1
+                    sum_of_distances += math.sqrt(y * y + x * x)
 
         # terminated = np.all(self._grid < 0).__bool__()
         terminated = bool(self._grid[-1][-1] == -1)
 
         truncated = False
 
-        if added == 0:
-            reward = -5.0
-        else:
-            reward = added - 0.25
+        reward = sum_of_distances / self.size
         if terminated:
             reward += 100
 
