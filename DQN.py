@@ -96,6 +96,7 @@ class DQNAgent:
         loss.backward()
         self.optimizer.step()
 
+    def decay_epsilon(self):
         # Update epsilon
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
@@ -141,6 +142,8 @@ for i_episode in range(1, n_episodes + 1):
             finishers += 1
             break
 
+    agent.decay_epsilon()
+
     scores_window.append(score)
     scores.append(score)
 
@@ -165,7 +168,7 @@ if True:
         sleep(0.1)
         next_state, reward, terminated, truncated, _ = human_env.step(action)
         done = terminated or truncated
-        agent.step(state, action, reward, next_state, done)
+        # agent.step(state, action, reward, next_state, done)
         state = next_state
         score += reward  # type: ignore
         if done:
