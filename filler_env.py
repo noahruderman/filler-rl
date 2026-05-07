@@ -15,7 +15,7 @@ class FillerEnv(gym.Env):
         self._grid = np.zeros(shape=(size, size), dtype=np.int32)
 
         self.observation_space = gym.spaces.Box(
-            low=0.0, high=1.0, shape=(size * size,), dtype=np.int32
+            low=0.0, high=1.0, shape=(size * size * 7 + 6,), dtype=np.float32
         )
 
         self.action_space = gym.spaces.Discrete(6)
@@ -27,7 +27,18 @@ class FillerEnv(gym.Env):
         self.clock = None
 
     def _get_obs(self):
-        return np.reshape(self._grid, -1)
+        """Concatenate the grid with the player's color
+
+            One hot: instead of using the color as a number,
+            use a binary array (better for neural nets)
+        """
+        grid_indices = self._grid.reshape(-1) + 1
+        grid_one_hot = np.eye(7, dtype=np.float32)[grid_indices]
+        grid_one_hot = grid_one_hot.reshape(-1)
+
+        player_one_hot = np.eye(6, dtype=np.float32)[int(self._player_color)]
+
+        return np.concatenate([grid_one_hot, player_one_hot])
 
     def _get_info(self):
         return {
