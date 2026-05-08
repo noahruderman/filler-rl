@@ -31,7 +31,9 @@ class DQNAgent:
     def __init__(self, state_size, action_size, seed=0):
         self.state_size = state_size
         self.action_size = action_size
-        self.seed = random.seed(seed)
+        self.seed = seed
+        random.seed(seed)
+        torch.manual_seed(seed)
 
         # Q-Network
         self.qnetwork = QNetwork(state_size, action_size)
@@ -70,7 +72,10 @@ class DQNAgent:
 
         # Greedy action selection
         selections = action_values.cpu().data.numpy()
-        arr = [selections[0][i] if action_mask[i] else float('-inf') for i in range(self.action_size)]
+        arr = [
+            selections[0][i] if action_mask[i] else float("-inf")
+            for i in range(self.action_size)
+        ]
         return np.argmax(arr)
 
     def learn(self, experiences):
@@ -105,79 +110,81 @@ class DQNAgent:
         self.epsilon = max(self.epsilon_min, self.epsilon * self.epsilon_decay)
 
 
-gym.register(id="gymnasium_env/Filler-v0", entry_point=FillerEnv)  # type:ignore
+def train_q_learning(
+    env: gym.Env, episodes: int = 1000, max_steps=100, seed: int = 0, status=False
+):
+    agent = DQNAgent(state_size, action_size, seed=seed)
+
+    scores = []
+    scores_window = deque(maxlen=100)
+    finishers = 0
+
+    for i_episode in range(1, episodes + 1):
+        state, info = env.reset(seed=seed + i_episode)
+        score = 0
+        for _ in range(max_steps):
+            action = agent.act(state, action_mask=info["action_mask"])
+            next_state, reward, terminated, truncated, info = env.step(action)
+            done = terminated or truncated
+            agent.step(state, action, reward, next_state, done)
+            state = next_state
+            score += float(reward)
+            if done:
+                finishers += 1
+                break
+
+        agent.decay_epsilon()
+
+        scores_window.append(score)
+        scores.append(score)
+
+        if status:
+            msg = f"\rEpisode {i_episode}\tCompleted {finishers}\tAverage Score: {np.mean(scores_window):.2f}"
+            print(msg, end="")
+            if i_episode % 100 == 0:
+                print(msg)
+                finishers = 0
+
+    return agent, scores
+
+
+gym.register(id="gymnasium_env/Filler-v0", entry_point=FillerEnv)  # type: ignore
 
 # Create the environment
-env_grid_size = 5
+env_grid_size = 8
 env = gym.make("gymnasium_env/Filler-v0", size=env_grid_size)
 
-if not env.observation_space.shape:
-    print("not defined")
-    exit()
-
-state_size = reduce(lambda a, b: a * b, list(env.observation_space.shape), 1)
+state_size = reduce(int.__mul__, list(env.observation_space.shape), 1)  # type: ignore
 action_size = env.action_space.n  # type: ignore
 print(state_size, action_size)
 
-# Initialize agent
-agent = DQNAgent(state_size, action_size)
 
 # Training parameters
-n_episodes = 600
+n_episodes = 500
 max_t = env_grid_size * 5 // 2
 
-# Lists to track progress
-scores = []
-scores_window = deque(maxlen=100)
+results = train_q_learning(
+    env, episodes=n_episodes, max_steps=max_t, seed=98762345, status=True
+)
+agent, scores = results
 
-finishers = 0
-# Training loop
-for i_episode in range(1, n_episodes + 1):
-    state, info = env.reset()
-    score = 0
-    for t in range(max_t):
-        action = agent.act(state, action_mask=info["action_mask"])
-        next_state, reward, terminated, truncated, info = env.step(action)
-        done = terminated or truncated
-        agent.step(state, action, reward, next_state, done)
-        state = next_state
-        score += reward  # type: ignore
-        if done:
-            finishers += 1
-            break
 
-    agent.decay_epsilon()
-
-    scores_window.append(score)
-    scores.append(score)
-
-    msg = f"\rEpisode {i_episode}\tCompleted {finishers}\tAverage Score: {np.mean(scores_window):.2f}"
-    print(msg, end="")
-    if i_episode % 100 == 0:
-        print(msg)
-        finishers = 0
-    if np.mean(scores_window) >= 195.0:
-        print(
-            f"\nEnvironment solved in {i_episode - 100} episodes!\tAverage Score: {np.mean(scores_window):.2f}"
-        )
-        torch.save(agent.qnetwork.state_dict(), "checkpoint.pth")
-        break
-
+# evaluate the agent
 human_env = gym.make("gymnasium_env/Filler-v0", size=env_grid_size, render_mode="human")
 if True:
-    state, info = human_env.reset()
+    state, info = human_env.reset(seed=998244353)
     score = 0
     for t in range(300):
-        action = agent.act(state, eval_mode=False, action_mask=info["action_mask"])
-        sleep(0.2)
+        sleep(0.5)
+        action = agent.act(state, eval_mode=True, action_mask=info["action_mask"])
         next_state, reward, terminated, truncated, info = human_env.step(action)
         done = terminated or truncated
         # agent.step(state, action, reward, next_state, done)
         state = next_state
-        score += reward  # type: ignore
+        score += float(reward)
+        print(reward)
         if done:
             break
-        print(reward)
     print("steps:", t, "reward:", score)  # type: ignore
 
 

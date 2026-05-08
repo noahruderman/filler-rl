@@ -64,6 +64,7 @@ class FillerEnv(gym.Env):
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
         super().reset(seed=seed)  # reqd
+        np.random.seed(seed)
 
         self._grid = self.np_random.integers(
             0, 6, size=(self.size, self.size), dtype=np.int32
